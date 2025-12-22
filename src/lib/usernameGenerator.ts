@@ -1,4 +1,7 @@
-// Word lists for username generation
+import { getCharactersFromThemes, type Theme } from './themes';
+import { generateThemeVariation, generateVariation } from './usernameVariations';
+
+// Word lists for username generation (used in random mode)
 const adjectives = [
 	'swift', 'clever', 'brave', 'bright', 'calm', 'cool', 'daring', 'eager', 'fierce', 'gentle',
 	'jolly', 'keen', 'lively', 'mighty', 'noble', 'proud', 'quick', 'radiant', 'sharp', 'tough',
@@ -22,38 +25,48 @@ const verbs = [
 ];
 
 /**
- * Generates a random username by combining random words
+ * Generates a random username by creating variations of theme characters or random words
  * @param options Configuration options for username generation
  * @returns A randomly generated username
  */
 export function generateUsername(options: {
-	wordCount?: number;
-	separator?: string;
-	capitalize?: boolean;
+	themes?: Theme[];
 } = {}): string {
-	const { wordCount = 2, separator = '', capitalize = true } = options;
+	const { themes } = options;
 
-	const allWords = [...adjectives, ...nouns, ...verbs];
-	const selectedWords: string[] = [];
+	// Get theme characters if themes are specified
+	const themeCharacters = themes && themes.length > 0 ? getCharactersFromThemes(themes) : [];
+	const hasLotrTheme = !!themes?.includes('lotr');
 
-	// Select random words
-	for (let i = 0; i < wordCount; i++) {
+	if (themeCharacters.length > 0) {
+		// Theme mode: pick a random character and generate a variation
+		const randomIndex = Math.floor(Math.random() * themeCharacters.length);
+		const baseName = themeCharacters[randomIndex];
+
+		// For Lord of the Rings theme, sometimes use the exact character name (normalized)
+		// instead of always generating a variation, so we don't exclude real LOTR names.
+		if (hasLotrTheme && Math.random() < 0.3) {
+			// Normalize similar to generateVariation: take first word, lowercase, then capitalize
+			const normalized = baseName.replace(/([A-Z])/g, ' $1').trim().toLowerCase();
+			const processed = normalized.split(' ')[0];
+			const exactName = processed.charAt(0).toUpperCase() + processed.slice(1);
+
+			return exactName;
+		}
+		
+		// Get other characters for potential combination (30% chance)
+		const otherNames = themeCharacters.filter((name, idx) => idx !== randomIndex);
+		const useCombination = otherNames.length > 0;
+		
+		return generateThemeVariation(baseName, otherNames, useCombination);
+	} else {
+		// Random mode: pick a random word and generate a variation
+		const allWords = [...adjectives, ...nouns, ...verbs];
 		const randomIndex = Math.floor(Math.random() * allWords.length);
-		selectedWords.push(allWords[randomIndex]);
+		const baseWord = allWords[randomIndex];
+		
+		return generateVariation(baseWord);
 	}
-
-	// Combine words
-	let username = selectedWords.join(separator);
-
-	// Capitalize if requested
-	if (capitalize) {
-		username = username
-			.split(separator || ' ')
-			.map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-			.join(separator);
-	}
-
-	return username;
 }
 
 /**
