@@ -12,6 +12,9 @@
 	let useAI = false;
 	let isGenerating = false;
 	let rateLimitError: string | null = null;
+	// Store last 10 AI-generated usernames to prevent duplicates
+	let previousAIUsernames: string[] = [];
+	const MAX_PREVIOUS_USERNAMES = 10;
 
 	onMount(() => {
 		// Load dark mode preference from localStorage
@@ -42,6 +45,19 @@
 	}
 
 	function toggleTheme(theme: Theme) {
+		// When AI is enabled, keep Random checked and prevent other theme changes
+		if (useAI) {
+			if (theme !== 'random') {
+				// Prevent checking other themes when AI is enabled
+				return;
+			}
+			// Keep Random checked when AI is enabled
+			if (!selectedThemes.includes('random')) {
+				selectedThemes = ['random'];
+			}
+			return;
+		}
+
 		if (theme === 'random') {
 			// If clicking random, toggle it
 			if (selectedThemes.includes('random')) {
@@ -75,7 +91,22 @@
 		if (useAI) {
 			isGenerating = true;
 			try {
-				username = await generateAIGeneratedUsername(selectedThemes);
+				// When AI is enabled, don't send themes (send empty array)
+				// Pass previous usernames to avoid duplicates
+				const result = await generateAIGeneratedUsername([], previousAIUsernames);
+				username = result.username;
+				
+				// Add the new username to the list of previous usernames
+				// Keep only the last MAX_PREVIOUS_USERNAMES
+				previousAIUsernames = [username, ...previousAIUsernames].slice(0, MAX_PREVIOUS_USERNAMES);
+				
+				// Log prompt and raw response to browser console
+				if (result.prompt) {
+					console.log('AI Prompt:', result.prompt);
+				}
+				if (result.content) {
+					console.log('AI Raw Response:', result.content);
+				}
 			} catch (error) {
 				console.error('AI generation failed:', error);
 				const aiError = error as AIGenerationError;
@@ -169,11 +200,13 @@
 			<div class="checkboxes">
 				{#each Object.entries(themes) as [key, theme]}
 					{@const themeKey = key as Theme}
-					<label class="checkbox-label">
+					{@const isDisabled = useAI && themeKey !== 'random'}
+					<label class="checkbox-label" class:disabled={isDisabled}>
 						<input
 							type="checkbox"
 							checked={selectedThemes.includes(themeKey)}
 							on:change={() => toggleTheme(themeKey)}
+							disabled={isDisabled}
 							class="checkbox-input"
 						/>
 						<span class="checkbox-text">{theme.name}</span>
@@ -188,6 +221,15 @@
 						checked={useAI}
 						on:change={() => {
 							useAI = !useAI;
+							if (useAI) {
+								// When AI is enabled, check Random and uncheck others
+								selectedThemes = ['random'];
+								// Clear previous usernames when AI is first enabled
+								previousAIUsernames = [];
+							} else {
+								// Clear previous usernames when AI is disabled
+								previousAIUsernames = [];
+							}
 							generateNew();
 						}}
 						class="checkbox-input"
@@ -514,11 +556,24 @@
 		background: #4b5563;
 	}
 
+	.checkbox-label.disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+
+	.checkbox-label.disabled:hover {
+		background: transparent;
+	}
+
 	.checkbox-input {
 		width: 18px;
 		height: 18px;
 		cursor: pointer;
 		accent-color: #667eea;
+	}
+
+	.checkbox-input:disabled {
+		cursor: not-allowed;
 	}
 
 	.checkbox-text {

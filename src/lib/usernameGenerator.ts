@@ -45,7 +45,7 @@ export function generateUsername(options: {
 
 		// For Lord of the Rings theme, sometimes use the exact character name (normalized)
 		// instead of always generating a variation, so we don't exclude real LOTR names.
-		if (hasLotrTheme && Math.random() < 0.3) {
+		if (hasLotrTheme && Math.random() < 0.5) {
 			// Normalize similar to generateVariation: take first word, lowercase, then capitalize
 			const normalized = baseName.replace(/([A-Z])/g, ' $1').trim().toLowerCase();
 			const processed = normalized.split(' ')[0];

@@ -68,12 +68,14 @@ function getClientIP(request: Request): string {
 
 export const POST: RequestHandler = async ({ request }) => {
 	// Parse request body once and store it
-	let body: { themes: Theme[] };
+	let body: { themes: Theme[]; previousUsernames?: string[] };
 	let themes: Theme[];
+	let previousUsernames: string[] = [];
 
 	try {
 		body = await request.json();
 		themes = body.themes;
+		previousUsernames = body.previousUsernames || [];
 	} catch (parseError) {
 		return json({ error: 'Invalid JSON in request body' }, { status: 400 });
 	}
@@ -110,7 +112,7 @@ export const POST: RequestHandler = async ({ request }) => {
 
 		// Get theme data
 		const themeCharacters = getCharactersFromThemes(themes);
-		const prompt = buildAIPrompt(themes, themeCharacters);
+		const prompt = buildAIPrompt(themes, themeCharacters, previousUsernames);
 
 		// Call OpenRouter API directly
 		const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -125,12 +127,16 @@ export const POST: RequestHandler = async ({ request }) => {
 				model: 'google/gemma-3-27b-it:free',
 				messages: [
 					{
+						role: 'system',
+						content: 'You are a creative username generator. Generate unique, varied usernames each time, even when given similar themes. Always provide different variations.'
+					},
+					{
 						role: 'user',
 						content: prompt
 					}
 				],
 				max_tokens: 50,
-				temperature: 0.8
+				temperature: 0.9
 			})
 		});
 
@@ -146,6 +152,9 @@ export const POST: RequestHandler = async ({ request }) => {
 		if (!content) {
 			throw new Error('No content in AI response');
 		}
+
+		// Store raw response for logging
+		const rawResponse = JSON.stringify(data, null, 2);
 
 		// Clean up the response - remove any extra text, quotes, etc.
 		let username = content
@@ -188,6 +197,8 @@ export const POST: RequestHandler = async ({ request }) => {
 
 		return json({
 			username,
+			prompt,
+			content,
 			rateLimit: {
 				remaining: rateLimit.remaining,
 				resetAt: rateLimit.resetAt
