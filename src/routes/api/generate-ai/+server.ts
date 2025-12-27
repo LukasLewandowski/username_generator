@@ -4,6 +4,9 @@ import { buildAIPrompt } from '$lib/aiUsernameGenerator';
 import { getCharactersFromThemes, type Theme } from '$lib/themes';
 import { env } from '$env/dynamic/private';
 
+// Disable prerendering for this API route since it requires server-side execution
+export const prerender = false;
+
 // Rate limiting: 5 requests per minute per IP
 const rateLimitMap = new Map<string, number[]>();
 const RATE_LIMIT_REQUESTS = 50;
