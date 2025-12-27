@@ -10,6 +10,19 @@ export interface AIGenerationError {
 }
 
 /**
+ * Type guard to check if an error is an AIGenerationError
+ * AIGenerationError is a plain object, not an Error instance
+ */
+function isAIGenerationError(error: unknown): error is AIGenerationError {
+	return (
+		error !== null &&
+		typeof error === 'object' &&
+		'message' in error &&
+		!(error instanceof Error)
+	);
+}
+
+/**
  * Generates a username using AI (LLM) based on selected themes
  * @param themes Selected themes to base the username on
  * @returns Promise resolving to a generated username
@@ -25,9 +38,10 @@ export async function generateAIGeneratedUsername(selectedThemes: Theme[]): Prom
 			body: JSON.stringify({ themes: selectedThemes })
 		});
 
-		// If response is not ok, or not JSON, fall back to regular generation
+		// If response is not JSON, fall back to regular generation
 		// This handles 404/405 errors from static sites without server-side API routes
-		if (!response.ok || !response.headers.get('content-type')?.includes('application/json')) {
+		const contentType = response.headers.get('content-type');
+		if (!contentType || !contentType.toLowerCase().includes('application/json')) {
 			console.warn('AI generation not available, using fallback');
 			return generateUsername({ themes: selectedThemes });
 		}
@@ -44,12 +58,12 @@ export async function generateAIGeneratedUsername(selectedThemes: Theme[]): Prom
 
 		return data.username || generateUsername({ themes: selectedThemes });
 	} catch (error) {
-		// If it's our custom AIGenerationError, rethrow it
-		if (error && typeof error === 'object' && 'message' in error && 'rateLimit' in error) {
+		// If it's our custom AIGenerationError, rethrow it so the UI can display it
+		if (isAIGenerationError(error)) {
 			throw error;
 		}
 
-		// Network, parsing, or other errors - fallback to regular generation
+		// Network, parsing, or other errors (like JSON parse errors) - fallback to regular generation
 		console.error('AI generation error:', error);
 		return generateUsername({ themes: selectedThemes });
 	}
