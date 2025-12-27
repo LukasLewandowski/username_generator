@@ -25,6 +25,13 @@ export async function generateAIGeneratedUsername(selectedThemes: Theme[]): Prom
 			body: JSON.stringify({ themes: selectedThemes })
 		});
 
+		// If response is not ok, or not JSON, fall back to regular generation
+		// This handles 404/405 errors from static sites without server-side API routes
+		if (!response.ok || !response.headers.get('content-type')?.includes('application/json')) {
+			console.warn('AI generation not available, using fallback');
+			return generateUsername({ themes: selectedThemes });
+		}
+
 		const data = await response.json();
 
 		if (!response.ok) {
@@ -37,12 +44,12 @@ export async function generateAIGeneratedUsername(selectedThemes: Theme[]): Prom
 
 		return data.username || generateUsername({ themes: selectedThemes });
 	} catch (error) {
-		// If it's our custom error, rethrow it
-		if (error && typeof error === 'object' && 'message' in error) {
+		// If it's our custom AIGenerationError, rethrow it
+		if (error && typeof error === 'object' && 'message' in error && 'rateLimit' in error) {
 			throw error;
 		}
 
-		// Network or other errors - fallback to regular generation
+		// Network, parsing, or other errors - fallback to regular generation
 		console.error('AI generation error:', error);
 		return generateUsername({ themes: selectedThemes });
 	}
