@@ -45,19 +45,6 @@
 	}
 
 	function toggleTheme(theme: Theme) {
-		// When AI is enabled, keep Random checked and prevent other theme changes
-		if (useAI) {
-			if (theme !== 'random') {
-				// Prevent checking other themes when AI is enabled
-				return;
-			}
-			// Keep Random checked when AI is enabled
-			if (!selectedThemes.includes('random')) {
-				selectedThemes = ['random'];
-			}
-			return;
-		}
-
 		if (theme === 'random') {
 			// If clicking random, toggle it
 			if (selectedThemes.includes('random')) {
@@ -91,9 +78,8 @@
 		if (useAI) {
 			isGenerating = true;
 			try {
-				// When AI is enabled, don't send themes (send empty array)
-				// Pass previous usernames to avoid duplicates
-				const result = await generateAIGeneratedUsername([], previousAIUsernames);
+				// Pass selected themes and previous usernames to avoid duplicates
+				const result = await generateAIGeneratedUsername(selectedThemes, previousAIUsernames);
 				username = result.username;
 				
 				// Add the new username to the list of previous usernames
@@ -200,13 +186,11 @@
 			<div class="checkboxes">
 				{#each Object.entries(themes) as [key, theme]}
 					{@const themeKey = key as Theme}
-					{@const isDisabled = useAI && themeKey !== 'random'}
-					<label class="checkbox-label" class:disabled={isDisabled}>
+					<label class="checkbox-label">
 						<input
 							type="checkbox"
 							checked={selectedThemes.includes(themeKey)}
 							on:change={() => toggleTheme(themeKey)}
-							disabled={isDisabled}
 							class="checkbox-input"
 						/>
 						<span class="checkbox-text">{theme.name}</span>
@@ -221,15 +205,8 @@
 						checked={useAI}
 						on:change={() => {
 							useAI = !useAI;
-							if (useAI) {
-								// When AI is enabled, check Random and uncheck others
-								selectedThemes = ['random'];
-								// Clear previous usernames when AI is first enabled
-								previousAIUsernames = [];
-							} else {
-								// Clear previous usernames when AI is disabled
-								previousAIUsernames = [];
-							}
+							// Clear previous usernames when AI is toggled
+							previousAIUsernames = [];
 							generateNew();
 						}}
 						class="checkbox-input"
@@ -556,24 +533,11 @@
 		background: #4b5563;
 	}
 
-	.checkbox-label.disabled {
-		opacity: 0.5;
-		cursor: not-allowed;
-	}
-
-	.checkbox-label.disabled:hover {
-		background: transparent;
-	}
-
 	.checkbox-input {
 		width: 18px;
 		height: 18px;
 		cursor: pointer;
 		accent-color: #667eea;
-	}
-
-	.checkbox-input:disabled {
-		cursor: not-allowed;
 	}
 
 	.checkbox-text {

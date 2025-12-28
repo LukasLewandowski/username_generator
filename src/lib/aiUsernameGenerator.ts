@@ -95,21 +95,14 @@ export function buildAIPrompt(
 	let previousUsernamesSection = '';
 	if (previousUsernames.length > 0) {
 		const usernamesList = previousUsernames.join(', ');
-		previousUsernamesSection = `\n\nIMPORTANT: Do NOT generate any of these usernames that were already created: ${usernamesList}\nGenerate a completely different username.`;
+		previousUsernamesSection = `\n\nDo NOT use these usernames: ${usernamesList}`;
 	}
 
-	// If no themes provided, generate a general username
+	// If no themes provided or only random, generate a general username
 	if (selectedThemes.length === 0 || (selectedThemes.length === 1 && selectedThemes[0] === 'random')) {
-		return `Generate a unique and creative username.${previousUsernamesSection}
+		return `Generate a creative username.${previousUsernamesSection}
 
-Requirements:
-- Make it creative and unique
-- Generate a DIFFERENT variation than previous requests - be creative and vary the approach
-- Single word, no spaces
-- Maximum 20 characters
-- Should be memorable and interesting
-
-Generate only the username, nothing else.`;
+Single word, max 20 characters. Output only the username.`;
 	}
 
 	const themeNames = selectedThemes
@@ -124,18 +117,9 @@ Generate only the username, nothing else.`;
 	const shuffledCharacters = shuffleArray(themeCharacters);
 	const examples = shuffledCharacters.slice(0, Math.min(5, shuffledCharacters.length)).join(', ');
 
-	return `Generate a unique and different username inspired by the following themes: ${themeNames}.${previousUsernamesSection}
+	return `Generate a username inspired by ${themeNames}.${previousUsernamesSection}
 
-Examples of characters from these themes: ${examples}
+Examples: ${examples}
 
-Requirements:
-- The username should sound familiar and reference the lore/theme
-- It should be a variation or derivative of existing names, not a direct copy
-- Make it creative and unique (like "Voljiner", "Aragornus", "Geralten")
-- Generate a DIFFERENT variation than previous requests - be creative and vary the approach
-- Single word, no spaces
-- Maximum 20 characters
-- Should feel authentic to the theme
-
-Generate only the username, nothing else.`;
+Single word, max 20 characters, theme-inspired. Output only the username.`;
 }
