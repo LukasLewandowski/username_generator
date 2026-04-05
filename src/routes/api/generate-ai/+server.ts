@@ -1,55 +1,21 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { OpenRouter } from '@openrouter/sdk';
+import Groq from 'groq-sdk';
 import { buildAIPrompt } from '$lib/aiUsernameGenerator';
 import { getCharactersFromThemes, type Theme } from '$lib/themes';
 import { env } from '$env/dynamic/private';
 
-/** Free models, first preferred; OpenRouter falls through the list on errors / limits. */
-const OPENROUTER_FREE_MODELS = [
-	'meta-llama/llama-3.2-3b-instruct:free',
-	'mistralai/mistral-7b-instruct:free',
-	'qwen/qwen-2.5-7b-instruct:free'
-] as const;
+const GROQ_MODEL = 'llama-3.1-8b-instant';
 
-function openRouterClient(apiKey: string) {
-	return new OpenRouter({
-		apiKey,
-		appTitle: 'Username Generator',
-		retryConfig: {
-			strategy: 'backoff',
-			backoff: {
-				initialInterval: 1500,
-				maxInterval: 20_000,
-				exponent: 2,
-				maxElapsedTime: 45_000
-			},
-			retryConnectionErrors: true
-		}
-	});
-}
-
-function openRouterErrorMessage(error: unknown): string {
+function groqErrorMessage(error: unknown): string {
 	if (error instanceof Error) {
 		const status =
-			'statusCode' in error && typeof (error as { statusCode: unknown }).statusCode === 'number'
-				? `${(error as { statusCode: number }).statusCode} `
+			'status' in error && typeof (error as { status: unknown }).status === 'number'
+				? `${(error as { status: number }).status} `
 				: '';
 		return `${status}${error.message}`;
 	}
 	return String(error);
-}
-
-function assistantContentToString(
-	content: string | Array<{ text?: string }> | null | undefined
-): string {
-	if (content == null) return '';
-	if (typeof content === 'string') return content.trim();
-	if (!Array.isArray(content)) return '';
-	return content
-		.map((part) => (typeof part?.text === 'string' ? part.text : ''))
-		.join('')
-		.trim();
 }
 
 export const POST: RequestHandler = async ({ request }) => {
@@ -66,9 +32,9 @@ export const POST: RequestHandler = async ({ request }) => {
 	}
 
 	try {
-		const OPENROUTER_API_KEY = env.OPENROUTER_API_KEY;
-		if (!OPENROUTER_API_KEY) {
-			return json({ error: 'OpenRouter API key not configured' }, { status: 500 });
+		const GROQ_API_KEY = env.GROQ_API_KEY;
+		if (!GROQ_API_KEY) {
+			return json({ error: 'Groq API key not configured' }, { status: 500 });
 		}
 
 		if (!themes || !Array.isArray(themes)) {
@@ -78,26 +44,21 @@ export const POST: RequestHandler = async ({ request }) => {
 		const themeCharacters = getCharactersFromThemes(themes);
 		const prompt = buildAIPrompt(themes, themeCharacters, previousUsernames);
 
-		const referer =
-			request.headers.get('origin') || request.headers.get('referer') || 'https://usernamegenerator.app';
+		const groqRequest = {
+			model: GROQ_MODEL,
+			messages: [{ role: 'user' as const, content: prompt }],
+			max_tokens: 50,
+			temperature: 0.9
+		};
+		console.info('[generate-ai] Groq request:', JSON.stringify(groqRequest, null, 2));
 
-		const client = openRouterClient(OPENROUTER_API_KEY);
-		const completion = await client.chat.send({
-			httpReferer: referer,
-			appTitle: 'Username Generator',
-			chatRequest: {
-				model: OPENROUTER_FREE_MODELS[0],
-				models: [...OPENROUTER_FREE_MODELS],
-				messages: [{ role: 'user', content: prompt }],
-				maxCompletionTokens: 50,
-				temperature: 0.9,
-				stream: false
-			}
-		});
+		const groq = new Groq({ apiKey: GROQ_API_KEY });
+		const completion = await groq.chat.completions.create(groqRequest);
+		console.info('[generate-ai] Groq response:', JSON.stringify(completion, null, 2));
 
 		const choice = completion.choices?.[0];
-		const finishReason = choice?.finishReason;
-		const content = assistantContentToString(choice?.message?.content);
+		const finishReason = choice?.finish_reason;
+		const content = (choice?.message?.content ?? '').trim();
 
 		if (!content) {
 			const reason = finishReason ? ` (finish_reason: ${finishReason})` : '';
@@ -146,7 +107,7 @@ export const POST: RequestHandler = async ({ request }) => {
 			content
 		});
 	} catch (error) {
-		console.error('AI generation error:', openRouterErrorMessage(error));
+		console.error('AI generation error:', groqErrorMessage(error));
 
 		try {
 			if (!themes || !Array.isArray(themes)) {
@@ -162,7 +123,7 @@ export const POST: RequestHandler = async ({ request }) => {
 			});
 		} catch (fallbackError) {
 			return json(
-				{ error: 'Failed to generate username', details: openRouterErrorMessage(error) },
+				{ error: 'Failed to generate username', details: groqErrorMessage(error) },
 				{ status: 500 }
 			);
 		}

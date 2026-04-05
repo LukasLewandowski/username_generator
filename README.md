@@ -27,7 +27,7 @@ Use a Node app, not a static site.
 
 - Build command: `npm install && npm run build`
 - Start command: `npm run start`
-- Required env vars: `OPENROUTER_API_KEY`
+- Required env vars: `GROQ_API_KEY`
 
 Optional:
 
