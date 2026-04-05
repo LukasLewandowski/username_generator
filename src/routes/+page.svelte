@@ -103,11 +103,11 @@
 				// Pass selected themes and previous usernames to avoid duplicates
 				const result = await generateAIGeneratedUsername(selectedThemes, previousAIUsernames);
 				username = result.username;
-				
+
 				// Add the new username to the list of previous usernames
 				// Keep only the last MAX_PREVIOUS_USERNAMES
 				previousAIUsernames = [username, ...previousAIUsernames].slice(0, MAX_PREVIOUS_USERNAMES);
-				
+
 				// Log prompt and raw response to browser console
 				if (result.prompt) {
 					console.log('AI Prompt:', result.prompt);
@@ -309,11 +309,7 @@
 				{copyButtonText}
 			</button>
 
-			<button
-				class="btn btn-secondary"
-				disabled={useAI && (aiGenerateCooldownActive || isGenerating)}
-				on:click={onGenerateNextClick}
-			>
+			<button class="btn btn-secondary" disabled={useAI && (aiGenerateCooldownActive || isGenerating)} on:click={onGenerateNextClick}>
 				<svg
 					class="icon"
 					xmlns="http://www.w3.org/2000/svg"
