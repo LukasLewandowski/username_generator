@@ -115,21 +115,18 @@ export const POST: RequestHandler = async ({ request }) => {
 		const prompt = buildAIPrompt(themes, themeCharacters, previousUsernames);
 
 		// Call OpenRouter API directly
+		const referer = request.headers.get('origin') || request.headers.get('referer') || 'https://usernamegenerator.app';
 		const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
 			method: 'POST',
 			headers: {
 				'Content-Type': 'application/json',
 				Authorization: `Bearer ${OPENROUTER_API_KEY}`,
-				'HTTP-Referer': request.headers.get('referer') || 'https://username-generator.local',
+				'HTTP-Referer': referer,
 				'X-Title': 'Username Generator'
 			},
 			body: JSON.stringify({
-				model: 'google/gemma-3-27b-it:free',
+				model: 'meta-llama/llama-3.2-3b-instruct:free',
 				messages: [
-					{
-						role: 'system',
-						content: 'You are a creative username generator. Generate unique, varied usernames each time, even when given similar themes. Always provide different variations.'
-					},
 					{
 						role: 'user',
 						content: prompt
@@ -140,17 +137,21 @@ export const POST: RequestHandler = async ({ request }) => {
 			})
 		});
 
-		if (!response.ok) {
-			const errorData = await response.json().catch(() => ({}));
-			throw new Error(`OpenRouter API error: ${response.status} ${errorData.error?.message || response.statusText}`);
-		}
-
 		const data = await response.json();
 
+		if (!response.ok) {
+			const errMsg = data?.error?.message || data?.error || response.statusText;
+			throw new Error(`OpenRouter API error: ${response.status} ${errMsg}`);
+		}
+
 		// Extract username from response
-		const content = data.choices[0]?.message?.content?.trim();
+		const choice = data.choices?.[0];
+		const finishReason = choice?.finish_reason;
+		const content = choice?.message?.content?.trim();
+
 		if (!content) {
-			throw new Error('No content in AI response');
+			const reason = finishReason ? ` (finish_reason: ${finishReason})` : '';
+			throw new Error(`No content in AI response${reason}`);
 		}
 
 		// Store raw response for logging
@@ -205,7 +206,7 @@ export const POST: RequestHandler = async ({ request }) => {
 			}
 		});
 	} catch (error) {
-		console.error('AI generation error:', error);
+		console.error('AI generation error:', error instanceof Error ? error.message : error);
 
 		// Fallback to regular generation on error
 		try {
