@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, onDestroy } from 'svelte';
 	import { generateUsername } from '$lib/usernameGenerator';
 	import { themes, type Theme } from '$lib/themes';
 	import { generateAIGeneratedUsername, type AIGenerationError } from '$lib/aiUsernameGenerator';
@@ -12,9 +12,18 @@
 	let useAI = false;
 	let isGenerating = false;
 	let rateLimitError: string | null = null;
+	let aiGenerateCooldownActive = false;
+	let aiCooldownTimer: ReturnType<typeof setTimeout> | undefined;
+	const AI_GENERATE_COOLDOWN_MS = 10_000;
 	// Store last 10 AI-generated usernames to prevent duplicates
 	let previousAIUsernames: string[] = [];
 	const MAX_PREVIOUS_USERNAMES = 10;
+
+	onDestroy(() => {
+		if (aiCooldownTimer !== undefined) {
+			clearTimeout(aiCooldownTimer);
+		}
+	});
 
 	onMount(() => {
 		// Load dark mode preference from localStorage
@@ -70,6 +79,19 @@
 		generateNew();
 	}
 
+	function onGenerateNextClick() {
+		if (useAI && aiGenerateCooldownActive) return;
+		if (useAI) {
+			aiGenerateCooldownActive = true;
+			if (aiCooldownTimer !== undefined) clearTimeout(aiCooldownTimer);
+			aiCooldownTimer = setTimeout(() => {
+				aiGenerateCooldownActive = false;
+				aiCooldownTimer = undefined;
+			}, AI_GENERATE_COOLDOWN_MS);
+		}
+		generateNew();
+	}
+
 	async function generateNew() {
 		copied = false;
 		copyButtonText = 'Copy';
@@ -97,12 +119,7 @@
 				console.error('AI generation failed:', error);
 				const aiError = error as AIGenerationError;
 
-				if (aiError.rateLimit) {
-					const resetIn = Math.ceil((aiError.rateLimit.resetAt - Date.now()) / 1000);
-					rateLimitError = `Rate limit exceeded. Try again in ${resetIn} seconds.`;
-				} else {
-					rateLimitError = aiError.message || 'AI generation failed';
-				}
+				rateLimitError = aiError.message || 'AI generation failed';
 
 				// Fallback to regular generation if AI fails
 				username = generateUsername({ themes: selectedThemes });
@@ -205,8 +222,12 @@
 						checked={useAI}
 						on:change={() => {
 							useAI = !useAI;
-							// Clear previous usernames when AI is toggled
 							previousAIUsernames = [];
+							if (!useAI && aiCooldownTimer !== undefined) {
+								clearTimeout(aiCooldownTimer);
+								aiCooldownTimer = undefined;
+								aiGenerateCooldownActive = false;
+							}
 							generateNew();
 						}}
 						class="checkbox-input"
@@ -288,7 +309,11 @@
 				{copyButtonText}
 			</button>
 
-			<button class="btn btn-secondary" on:click={generateNew}>
+			<button
+				class="btn btn-secondary"
+				disabled={useAI && (aiGenerateCooldownActive || isGenerating)}
+				on:click={onGenerateNextClick}
+			>
 				<svg
 					class="icon"
 					xmlns="http://www.w3.org/2000/svg"
@@ -681,6 +706,25 @@
 	.container.dark .btn-secondary:hover {
 		background: #667eea;
 		color: white;
+	}
+
+	.btn-secondary:disabled {
+		opacity: 0.55;
+		cursor: not-allowed;
+		transform: none;
+		box-shadow: none;
+	}
+
+	.btn-secondary:disabled:hover {
+		background: white;
+		color: #667eea;
+		transform: none;
+		box-shadow: none;
+	}
+
+	.container.dark .btn-secondary:disabled:hover {
+		background: #374151;
+		color: #667eea;
 	}
 
 	.icon {

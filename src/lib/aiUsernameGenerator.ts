@@ -3,10 +3,6 @@ import { generateUsername } from './usernameGenerator';
 
 export interface AIGenerationError {
 	message: string;
-	rateLimit?: {
-		remaining: number;
-		resetAt: number;
-	};
 }
 
 export interface AIGenerationResult {
@@ -20,7 +16,7 @@ export interface AIGenerationResult {
  * @param themes Selected themes to base the username on (empty array for no theme)
  * @param previousUsernames List of previously generated usernames to avoid duplicates
  * @returns Promise resolving to a generated username with prompt and raw response
- * @throws {AIGenerationError} If AI generation fails or rate limit is exceeded
+ * @throws {AIGenerationError} If AI generation fails
  */
 export async function generateAIGeneratedUsername(
 	selectedThemes: Theme[],
@@ -42,8 +38,7 @@ export async function generateAIGeneratedUsername(
 
 		if (!response.ok) {
 			const error: AIGenerationError = {
-				message: data.message || data.error || 'AI generation failed',
-				rateLimit: data.rateLimit
+				message: data.message || data.error || 'AI generation failed'
 			};
 			throw error;
 		}

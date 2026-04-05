@@ -1,73 +1,58 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
+import { OpenRouter } from '@openrouter/sdk';
 import { buildAIPrompt } from '$lib/aiUsernameGenerator';
 import { getCharactersFromThemes, type Theme } from '$lib/themes';
 import { env } from '$env/dynamic/private';
 
-// Rate limiting: 5 requests per minute per IP
-const rateLimitMap = new Map<string, number[]>();
-const RATE_LIMIT_REQUESTS = 50;
-const RATE_LIMIT_WINDOW = 60 * 1000; // 1 minute in milliseconds
+/** Free models, first preferred; OpenRouter falls through the list on errors / limits. */
+const OPENROUTER_FREE_MODELS = [
+	'meta-llama/llama-3.2-3b-instruct:free',
+	'mistralai/mistral-7b-instruct:free',
+	'qwen/qwen-2.5-7b-instruct:free'
+] as const;
 
-function checkRateLimit(ip: string): { allowed: boolean; remaining: number; resetAt: number } {
-	const now = Date.now();
-	const requests = rateLimitMap.get(ip) || [];
-
-	// Remove old requests outside the window
-	const recentRequests = requests.filter((timestamp) => now - timestamp < RATE_LIMIT_WINDOW);
-
-	if (recentRequests.length >= RATE_LIMIT_REQUESTS) {
-		const oldestRequest = recentRequests[0];
-		const resetAt = oldestRequest + RATE_LIMIT_WINDOW;
-		return {
-			allowed: false,
-			remaining: 0,
-			resetAt
-		};
-	}
-
-	// Add current request
-	recentRequests.push(now);
-	rateLimitMap.set(ip, recentRequests);
-
-	// Clean up old entries periodically (every 5 minutes)
-	if (Math.random() < 0.01) {
-		for (const [key, timestamps] of rateLimitMap.entries()) {
-			const filtered = timestamps.filter((ts) => now - ts < RATE_LIMIT_WINDOW * 5);
-			if (filtered.length === 0) {
-				rateLimitMap.delete(key);
-			} else {
-				rateLimitMap.set(key, filtered);
-			}
+function openRouterClient(apiKey: string) {
+	return new OpenRouter({
+		apiKey,
+		appTitle: 'Username Generator',
+		retryConfig: {
+			strategy: 'backoff',
+			backoff: {
+				initialInterval: 1500,
+				maxInterval: 20_000,
+				exponent: 2,
+				maxElapsedTime: 45_000
+			},
+			retryConnectionErrors: true
 		}
-	}
-
-	return {
-		allowed: true,
-		remaining: RATE_LIMIT_REQUESTS - recentRequests.length,
-		resetAt: now + RATE_LIMIT_WINDOW
-	};
+	});
 }
 
-function getClientIP(request: Request): string {
-	// Try to get IP from headers (for proxies/load balancers)
-	const forwarded = request.headers.get('x-forwarded-for');
-	if (forwarded) {
-		return forwarded.split(',')[0].trim();
+function openRouterErrorMessage(error: unknown): string {
+	if (error instanceof Error) {
+		const status =
+			'statusCode' in error && typeof (error as { statusCode: unknown }).statusCode === 'number'
+				? `${(error as { statusCode: number }).statusCode} `
+				: '';
+		return `${status}${error.message}`;
 	}
+	return String(error);
+}
 
-	const realIP = request.headers.get('x-real-ip');
-	if (realIP) {
-		return realIP;
-	}
-
-	// Fallback: use a session-based identifier if IP is not available
-	// In a real app, you might want to use cookies or session IDs
-	return request.headers.get('user-agent') || 'unknown';
+function assistantContentToString(
+	content: string | Array<{ text?: string }> | null | undefined
+): string {
+	if (content == null) return '';
+	if (typeof content === 'string') return content.trim();
+	if (!Array.isArray(content)) return '';
+	return content
+		.map((part) => (typeof part?.text === 'string' ? part.text : ''))
+		.join('')
+		.trim();
 }
 
 export const POST: RequestHandler = async ({ request }) => {
-	// Parse request body once and store it
 	let body: { themes: Theme[]; previousUsernames?: string[] };
 	let themes: Theme[];
 	let previousUsernames: string[] = [];
@@ -81,93 +66,52 @@ export const POST: RequestHandler = async ({ request }) => {
 	}
 
 	try {
-		// Check API key
 		const OPENROUTER_API_KEY = env.OPENROUTER_API_KEY;
 		if (!OPENROUTER_API_KEY) {
 			return json({ error: 'OpenRouter API key not configured' }, { status: 500 });
 		}
 
-		// Rate limiting
-		const clientIP = getClientIP(request);
-		const rateLimit = checkRateLimit(clientIP);
-
-		if (!rateLimit.allowed) {
-			return json(
-				{
-					error: 'Rate limit exceeded',
-					message: `Too many requests. Please try again in ${Math.ceil((rateLimit.resetAt - Date.now()) / 1000)} seconds.`,
-					resetAt: rateLimit.resetAt
-				},
-				{ status: 429 }
-			);
-		}
-
 		if (!themes || !Array.isArray(themes)) {
 			return json({ error: 'Invalid request: themes array required' }, { status: 400 });
 		}
 
-		if (!themes || !Array.isArray(themes)) {
-			return json({ error: 'Invalid request: themes array required' }, { status: 400 });
-		}
-
-		// Get theme data
 		const themeCharacters = getCharactersFromThemes(themes);
 		const prompt = buildAIPrompt(themes, themeCharacters, previousUsernames);
 
-		// Call OpenRouter API directly
-		const referer = request.headers.get('origin') || request.headers.get('referer') || 'https://usernamegenerator.app';
-		const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-			method: 'POST',
-			headers: {
-				'Content-Type': 'application/json',
-				Authorization: `Bearer ${OPENROUTER_API_KEY}`,
-				'HTTP-Referer': referer,
-				'X-Title': 'Username Generator'
-			},
-			body: JSON.stringify({
-				model: 'meta-llama/llama-3.2-3b-instruct:free',
-				messages: [
-					{
-						role: 'user',
-						content: prompt
-					}
-				],
-				max_tokens: 50,
-				temperature: 0.9
-			})
+		const referer =
+			request.headers.get('origin') || request.headers.get('referer') || 'https://usernamegenerator.app';
+
+		const client = openRouterClient(OPENROUTER_API_KEY);
+		const completion = await client.chat.send({
+			httpReferer: referer,
+			appTitle: 'Username Generator',
+			chatRequest: {
+				model: OPENROUTER_FREE_MODELS[0],
+				models: [...OPENROUTER_FREE_MODELS],
+				messages: [{ role: 'user', content: prompt }],
+				maxCompletionTokens: 50,
+				temperature: 0.9,
+				stream: false
+			}
 		});
 
-		const data = await response.json();
-
-		if (!response.ok) {
-			const errMsg = data?.error?.message || data?.error || response.statusText;
-			throw new Error(`OpenRouter API error: ${response.status} ${errMsg}`);
-		}
-
-		// Extract username from response
-		const choice = data.choices?.[0];
-		const finishReason = choice?.finish_reason;
-		const content = choice?.message?.content?.trim();
+		const choice = completion.choices?.[0];
+		const finishReason = choice?.finishReason;
+		const content = assistantContentToString(choice?.message?.content);
 
 		if (!content) {
 			const reason = finishReason ? ` (finish_reason: ${finishReason})` : '';
 			throw new Error(`No content in AI response${reason}`);
 		}
 
-		// Store raw response for logging
-		const rawResponse = JSON.stringify(data, null, 2);
-
-		// Clean up the response - remove any extra text, quotes, etc.
 		let username = content
-			.replace(/^["']|["']$/g, '') // Remove quotes
-			.replace(/\n.*/g, '') // Remove newlines and everything after
+			.replace(/^["']|["']$/g, '')
+			.replace(/\n.*/g, '')
 			.trim()
-			.split(/\s+/)[0]; // Take only first word
+			.split(/\s+/)[0];
 
-		// Validate username (max 20 chars, alphanumeric and common special chars)
 		const cleanedUsername = username.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 20);
 
-		// Reject obviously non-username generic words and fall back
 		const forbiddenUsernames = [
 			'please',
 			'here',
@@ -186,10 +130,10 @@ export const POST: RequestHandler = async ({ request }) => {
 		];
 
 		const lowerCleaned = cleanedUsername.toLowerCase();
-		let shouldFallback = !cleanedUsername || cleanedUsername.length < 2 || forbiddenUsernames.includes(lowerCleaned);
+		const shouldFallback =
+			!cleanedUsername || cleanedUsername.length < 2 || forbiddenUsernames.includes(lowerCleaned);
 
 		if (shouldFallback) {
-			// Fallback to regular generation if AI response is invalid or generic
 			const { generateUsername } = await import('$lib/usernameGenerator');
 			username = generateUsername({ themes });
 		} else {
@@ -199,36 +143,26 @@ export const POST: RequestHandler = async ({ request }) => {
 		return json({
 			username,
 			prompt,
-			content,
-			rateLimit: {
-				remaining: rateLimit.remaining,
-				resetAt: rateLimit.resetAt
-			}
+			content
 		});
 	} catch (error) {
-		console.error('AI generation error:', error instanceof Error ? error.message : error);
+		console.error('AI generation error:', openRouterErrorMessage(error));
 
-		// Fallback to regular generation on error
 		try {
-			const { generateUsername } = await import('$lib/usernameGenerator');
-			// Use already parsed themes
 			if (!themes || !Array.isArray(themes)) {
 				throw new Error('Invalid themes');
 			}
+
+			const { generateUsername } = await import('$lib/usernameGenerator');
 			const username = generateUsername({ themes });
 
 			return json({
 				username,
-				error: 'AI generation failed, using fallback',
-				rateLimit: {
-					remaining: 0,
-					resetAt: Date.now() + RATE_LIMIT_WINDOW
-				}
+				error: 'AI generation failed, using fallback'
 			});
 		} catch (fallbackError) {
-			// If we can't parse body again, return error
 			return json(
-				{ error: 'Failed to generate username', details: String(error) },
+				{ error: 'Failed to generate username', details: openRouterErrorMessage(error) },
 				{ status: 500 }
 			);
 		}
