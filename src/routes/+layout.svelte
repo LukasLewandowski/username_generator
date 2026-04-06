@@ -31,6 +31,8 @@
 			'Open Sans', 'Helvetica Neue', sans-serif;
 		-webkit-font-smoothing: antialiased;
 		-moz-osx-font-smoothing: grayscale;
+		position: relative;
+		min-height: 100vh;
 	}
 
 	:global(*) {
@@ -51,13 +53,16 @@
 
 	@media (max-width: 640px) {
 		.bmc-container {
+			position: absolute;
 			bottom: 16px;
 			left: 16px;
-			transform: scale(0.9);
+			transform: scale(0.75);
+			transform-origin: bottom left;
+			z-index: 10;
 		}
 
 		.bmc-container:hover {
-			transform: scale(0.95);
+			transform: scale(0.8);
 		}
 	}
 </style>

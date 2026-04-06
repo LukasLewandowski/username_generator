@@ -730,6 +730,10 @@
 	}
 
 	@media (max-width: 640px) {
+		.container {
+			padding-bottom: 5rem;
+		}
+
 		.card {
 			padding: 2rem 1.5rem;
 		}
