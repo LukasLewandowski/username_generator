@@ -33,3 +33,16 @@ Optional:
 
 - `GROQ_MODEL` — Groq model ID; defaults to `openai/gpt-oss-20b`
 - `BASE_PATH` if you are serving the app under a subpath
+
+### Groq Free Plan
+
+`openai/gpt-oss-20b` can be used on Groq's Free plan without monetary charges, subject to
+the plan's rate limits. At the time of writing, those limits are 30 requests per minute,
+1,000 requests per day, 8,000 tokens per minute, and 200,000 tokens per day. The app allows
+up to 1,024 completion tokens per AI request so GPT-OSS can complete its hidden reasoning before
+returning a username; reasoning-heavy requests may therefore reach the daily token limit before
+the daily request limit.
+
+If the Groq quota is exceeded or an AI request fails, the server falls back to the non-AI username
+generator. See Groq's [current Free plan limits](https://console.groq.com/docs/rate-limits), as
+they may change.

@@ -56,7 +56,10 @@ describe('generateAIGeneratedUsername', () => {
 	it('rethrows an API error message', async () => {
 		vi.stubGlobal(
 			'fetch',
-			vi.fn().mockResolvedValue({ ok: false, json: vi.fn().mockResolvedValue({ error: 'Rate limited' }) })
+			vi.fn().mockResolvedValue({
+				ok: false,
+				json: vi.fn().mockResolvedValue({ error: 'Rate limited' })
+			})
 		);
 
 		await expect(generateAIGeneratedUsername(['random'])).rejects.toMatchObject({
