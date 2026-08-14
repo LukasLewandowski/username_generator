@@ -118,6 +118,8 @@ export function generateVariation(baseName: string): string {
  * Generates multiple variations of a base name
  */
 export function generateMultipleVariations(baseName: string, count: number = 5): string[] {
+	if (!baseName || count <= 0) return [];
+
 	const variations = new Set<string>();
 	
 	while (variations.size < count) {

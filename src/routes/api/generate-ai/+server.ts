@@ -48,7 +48,7 @@ export const POST: RequestHandler = async ({ request }) => {
 		const groqRequest = {
 			model: GROQ_MODEL,
 			messages: [{ role: 'user' as const, content: prompt }],
-			max_completion_tokens: 128,
+			max_completion_tokens: 1024,
 			temperature: 0.9,
 			reasoning_effort: 'low' as const,
 			include_reasoning: false

@@ -50,7 +50,7 @@ export async function generateAIGeneratedUsername(
 		};
 	} catch (error) {
 		// If it's our custom error, rethrow it
-		if (error && typeof error === 'object' && 'message' in error) {
+		if (error && typeof error === 'object' && 'message' in error && !(error instanceof Error)) {
 			throw error;
 		}
 
