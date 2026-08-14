@@ -31,4 +31,5 @@ Use a Node app, not a static site.
 
 Optional:
 
+- `GROQ_MODEL` — Groq model ID; defaults to `openai/gpt-oss-20b`
 - `BASE_PATH` if you are serving the app under a subpath

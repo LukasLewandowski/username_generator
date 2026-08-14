@@ -108,7 +108,7 @@ export function generateVariation(baseName: string): string {
 	];
 	
 	const method = methods[Math.floor(Math.random() * methods.length)];
-	let variation = method();
+	const variation = method();
 	
 	// Capitalize first letter
 	return variation.charAt(0).toUpperCase() + variation.slice(1);

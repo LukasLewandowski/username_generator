@@ -16,16 +16,22 @@
 		"start": "node build",
 		"preview": "vite preview",
 		"prepare": "svelte-kit sync || echo ''",
+		"lint": "eslint . && npm run check",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch"
 	},
 	"devDependencies": {
+		"@eslint/js": "^10.0.1",
 		"@sveltejs/adapter-node": "^5.5.4",
 		"@sveltejs/kit": "^2.56.1",
 		"@sveltejs/vite-plugin-svelte": "^7.0.0",
+		"eslint": "^10.8.1",
+		"eslint-plugin-svelte": "^3.23.0",
+		"globals": "^17.11.0",
 		"svelte": "^5.55.1",
 		"svelte-check": "^4.4.6",
 		"typescript": "^6.0.2",
+		"typescript-eslint": "^8.67.0",
 		"vite": "^8.0.3"
 	},
 	"dependencies": {

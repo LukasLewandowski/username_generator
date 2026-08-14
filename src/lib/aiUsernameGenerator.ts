@@ -1,4 +1,4 @@
-import { getCharactersFromThemes, themes, type Theme } from './themes';
+import { themes, type Theme } from './themes';
 import { generateUsername } from './usernameGenerator';
 
 export interface AIGenerationError {
