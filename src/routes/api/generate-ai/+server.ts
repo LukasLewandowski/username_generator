@@ -5,7 +5,7 @@ import { buildAIPrompt } from '$lib/aiUsernameGenerator';
 import { getCharactersFromThemes, type Theme } from '$lib/themes';
 import { env } from '$env/dynamic/private';
 
-const GROQ_MODEL = 'llama-3.1-8b-instant';
+const DEFAULT_GROQ_MODEL = 'openai/gpt-oss-20b';
 
 function groqErrorMessage(error: unknown): string {
 	if (error instanceof Error) {
@@ -21,18 +21,19 @@ function groqErrorMessage(error: unknown): string {
 export const POST: RequestHandler = async ({ request }) => {
 	let body: { themes: Theme[]; previousUsernames?: string[] };
 	let themes: Theme[];
-	let previousUsernames: string[] = [];
+	let previousUsernames: string[];
 
 	try {
 		body = await request.json();
 		themes = body.themes;
 		previousUsernames = body.previousUsernames || [];
-	} catch (parseError) {
+	} catch {
 		return json({ error: 'Invalid JSON in request body' }, { status: 400 });
 	}
 
 	try {
 		const GROQ_API_KEY = env.GROQ_API_KEY;
+		const GROQ_MODEL = env.GROQ_MODEL?.trim() || DEFAULT_GROQ_MODEL;
 		if (!GROQ_API_KEY) {
 			return json({ error: 'Groq API key not configured' }, { status: 500 });
 		}
@@ -47,8 +48,10 @@ export const POST: RequestHandler = async ({ request }) => {
 		const groqRequest = {
 			model: GROQ_MODEL,
 			messages: [{ role: 'user' as const, content: prompt }],
-			max_tokens: 50,
-			temperature: 0.9
+			max_completion_tokens: 1024,
+			temperature: 0.9,
+			reasoning_effort: 'low' as const,
+			include_reasoning: false
 		};
 		console.info('[generate-ai] Groq request:', JSON.stringify(groqRequest, null, 2));
 
@@ -111,7 +114,7 @@ export const POST: RequestHandler = async ({ request }) => {
 
 		try {
 			if (!themes || !Array.isArray(themes)) {
-				throw new Error('Invalid themes');
+				throw new Error('Invalid themes', { cause: error });
 			}
 
 			const { generateUsername } = await import('$lib/usernameGenerator');
@@ -121,7 +124,7 @@ export const POST: RequestHandler = async ({ request }) => {
 				username,
 				error: 'AI generation failed, using fallback'
 			});
-		} catch (fallbackError) {
+		} catch {
 			return json(
 				{ error: 'Failed to generate username', details: groqErrorMessage(error) },
 				{ status: 500 }

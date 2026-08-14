@@ -1,4 +1,4 @@
-import { getCharactersFromThemes, themes, type Theme } from './themes';
+import { themes, type Theme } from './themes';
 import { generateUsername } from './usernameGenerator';
 
 export interface AIGenerationError {
@@ -28,7 +28,7 @@ export async function generateAIGeneratedUsername(
 			headers: {
 				'Content-Type': 'application/json'
 			},
-			body: JSON.stringify({ 
+			body: JSON.stringify({
 				themes: selectedThemes,
 				previousUsernames: previousUsernames
 			})
@@ -50,7 +50,7 @@ export async function generateAIGeneratedUsername(
 		};
 	} catch (error) {
 		// If it's our custom error, rethrow it
-		if (error && typeof error === 'object' && 'message' in error) {
+		if (error && typeof error === 'object' && 'message' in error && !(error instanceof Error)) {
 			throw error;
 		}
 
@@ -94,7 +94,10 @@ export function buildAIPrompt(
 	}
 
 	// If no themes provided or only random, generate a general username
-	if (selectedThemes.length === 0 || (selectedThemes.length === 1 && selectedThemes[0] === 'random')) {
+	if (
+		selectedThemes.length === 0 ||
+		(selectedThemes.length === 1 && selectedThemes[0] === 'random')
+	) {
 		return `Generate a creative username.${previousUsernamesSection}
 
 Single word, max 20 characters. Output only the username.`;

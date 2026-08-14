@@ -201,7 +201,7 @@
 		<div class="theme-selection">
 			<h2 class="theme-title">Choose Themes</h2>
 			<div class="checkboxes">
-				{#each Object.entries(themes) as [key, theme]}
+				{#each Object.entries(themes) as [key, theme] (key)}
 					{@const themeKey = key as Theme}
 					<label class="checkbox-label">
 						<input

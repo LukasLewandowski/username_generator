@@ -1,12 +1,5 @@
 // Theme data for username generation
-export type Theme =
-	| 'random'
-	| 'lotr'
-	| 'starwars'
-	| 'marvel'
-	| 'wow'
-	| 'slavic'
-	| 'witcher';
+export type Theme = 'random' | 'lotr' | 'starwars' | 'marvel' | 'wow' | 'slavic' | 'witcher';
 
 export interface ThemeData {
 	name: string;
